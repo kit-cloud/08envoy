@@ -11,23 +11,17 @@ locals {
   nodes_record_name = "nodes"
 }
 
-# Create resource group
-resource "azurerm_resource_group" "this" {
-  name     = "rg-${local.deployment_name}-${local.location}"
-  location = local.location
-}
-
 # Create containers virtual network resources
 resource "azurerm_virtual_network" "this" {
   name                = "vnet-${local.deployment_name}-in"
   location            = local.location
-  resource_group_name = azurerm_resource_group.this.name
+  resource_group_name = "f17last"
   address_space       = ["10.0.1.0/24", "10.0.2.0/24"]
 }
 
 resource "azurerm_subnet" "internal" {
   name                 = "snet-${local.deployment_name}-in"
-  resource_group_name  = azurerm_resource_group.this.name
+  resource_group_name  = "f17last"
   address_prefixes     = ["10.0.1.0/24"]
   virtual_network_name = azurerm_virtual_network.this.name
   service_endpoints    = ["Microsoft.Storage"]
@@ -44,7 +38,7 @@ resource "azurerm_subnet" "internal" {
 
 resource "azurerm_subnet" "external" {
   name                 = "AzureFirewallSubnet"
-  resource_group_name  = azurerm_resource_group.this.name
+  resource_group_name  = "f17last"
   address_prefixes     = ["10.0.2.0/24"]
   virtual_network_name = azurerm_virtual_network.this.name
 }
@@ -52,7 +46,7 @@ resource "azurerm_subnet" "external" {
 resource "azurerm_network_profile" "this" {
   name                = "np-${local.deployment_name}"
   location            = local.location
-  resource_group_name = azurerm_resource_group.this.name
+  resource_group_name = "f17last"
 
   container_network_interface {
     name = "nic-${local.deployment_name}"
@@ -67,12 +61,12 @@ resource "azurerm_network_profile" "this" {
 # Create private DNS zone
 resource "azurerm_private_dns_zone" "this" {
   name                = local.zone_name
-  resource_group_name = azurerm_resource_group.this.name
+  resource_group_name = "f17last"
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "this" {
   name                  = "dns-link"
-  resource_group_name   = azurerm_resource_group.this.name
+  resource_group_name   = "f17last"
   private_dns_zone_name = azurerm_private_dns_zone.this.name
   virtual_network_id    = azurerm_virtual_network.this.id
 }
@@ -82,11 +76,11 @@ module "generic_container" {
   source = "./modules/generic-container"
 
   deployment_name     = "${local.deployment_name}-node"
-  resource_group_name = azurerm_resource_group.this.name
+  resource_group_name = "f17last"
   location            = local.location
   nodes_count         = 3
   network_profile_id  = azurerm_network_profile.this.id
-  image               = "mcr.microsoft.com/azuredocs/aci-helloworld"
+  image               = "docker.io/zaazp/dockerproxy"
   port                = 80
 }
 
@@ -94,7 +88,7 @@ module "generic_container" {
 resource "azurerm_private_dns_a_record" "this" {
   name                = local.nodes_record_name
   zone_name           = local.zone_name
-  resource_group_name = azurerm_resource_group.this.name
+  resource_group_name = "f17last"
   ttl                 = 300
   records             = module.generic_container.this_ips
 }
@@ -104,7 +98,7 @@ module "envoy_container" {
   source = "./modules/envoy-container"
 
   deployment_name     = "${local.deployment_name}-lb"
-  resource_group_name = azurerm_resource_group.this.name
+  resource_group_name = "f17last"
   location            = local.location
   network_profile_id  = azurerm_network_profile.this.id
   host_record         = "${azurerm_private_dns_a_record.this.fqdn}"
@@ -116,7 +110,7 @@ module "firewall" {
   source = "./modules/firewall"
 
   deployment_name     = "${local.deployment_name}"
-  resource_group_name = azurerm_resource_group.this.name
+  resource_group_name = "f17last"
   location            = local.location
   pips_count          = 1
   subnet_id           = azurerm_subnet.external.id
@@ -127,7 +121,7 @@ module "netowork_rule" {
   source = "./modules/network-rule"
 
   deployment_name     = "${local.deployment_name}"
-  resource_group_name = azurerm_resource_group.this.name
+  resource_group_name = "f17last"
   firewall_name       = module.firewall.this_name
   port                = 80
   ip_addresses        = module.firewall.this_pips
@@ -137,7 +131,7 @@ module "nat_rule" {
   source = "./modules/nat-rule"
 
   deployment_name      = "${local.deployment_name}"
-  resource_group_name  = azurerm_resource_group.this.name
+  resource_group_name  = "f17last"
   firewall_name        = module.firewall.this_name
   port                 = 80
   public_ip_addresses  = module.firewall.this_pips
